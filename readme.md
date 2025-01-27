@@ -88,22 +88,16 @@ terraform apply
 
 ---
 
-## **Folder Structure**
-```
-alveum-devops-terraform/
-├── main.tf              # Main Terraform configuration
-├── variables.tf         # Input variables
-├── outputs.tf           # Output values
-├── README.md            # Documentation
-└── lambda/              # Lambda function code (optional)
-```
+## **Next Steps**
+1. **Add RabbitMQ Integration**:
+   - Store RabbitMQ credentials in AWS Secrets Manager.
+   - Update the Core Service Lambda function to consume messages from RabbitMQ.
 
----
+2. **Set Up CI/CD Pipeline**:
+   - Use AWS CodePipeline and CodeBuild to automate the deployment process.
 
-## **Assumptions**
-1. **RabbitMQ**: An external RabbitMQ server is used for message queuing. Credentials are stored in AWS Secrets Manager.
-2. **External APIs**: External AI APIs are accessible via the internet.
-3. **AWS Cognito**: Pre-configured for authentication (not included in this deployment).
+3. **Add Monitoring**:
+   - Set up CloudWatch Alarms and Dashboards for monitoring.
 
 ---
 
@@ -118,11 +112,3 @@ terraform destroy
 ## **Contributing**
 Feel free to open issues or submit pull requests for improvements.
 
----
-
-## **License**
-This project is licensed under the MIT License. See the [LICENSE](LICENSE) file for details.
-
----
-
-This README provides a comprehensive guide for deploying the system and explains the design decisions. Let me know if you need further assistance!
