@@ -5,7 +5,7 @@ variable "aws_region" {
 
 variable "db_username" {
   description = "Username for the RDS database"
-  default     = "admin"
+  default     = "alveumadmin"
 }
 
 variable "db_password" {

@@ -2,7 +2,12 @@ provider "aws" {
   region = var.aws_region
 }
 
-# 1. Create a VPC with public and private subnets
+# 1. Fetch available availability zones
+data "aws_availability_zones" "available" {
+  state = "available"
+}
+
+# 2. Create a VPC with public and private subnets
 resource "aws_vpc" "alveum_vpc" {
   cidr_block = "10.0.0.0/16"
   enable_dns_support = true
@@ -57,11 +62,65 @@ resource "aws_route_table_association" "public_subnet_association" {
   route_table_id = aws_route_table.public_route_table.id
 }
 
-# 2. Create an RDS PostgreSQL instance with RDS Proxy
+# 3. Create security groups
+resource "aws_security_group" "rds_sg" {
+  name        = "rds_sg"
+  description = "Allow inbound traffic to RDS"
+  vpc_id      = aws_vpc.alveum_vpc.id
+
+  ingress {
+    from_port   = 5432
+    to_port     = 5432
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  egress {
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+}
+
+resource "aws_security_group" "redis_sg" {
+  name        = "redis_sg"
+  description = "Allow inbound traffic to Redis"
+  vpc_id      = aws_vpc.alveum_vpc.id
+
+  ingress {
+    from_port   = 6379
+    to_port     = 6379
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  egress {
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+}
+
+resource "aws_security_group" "lambda_sg" {
+  name        = "lambda_sg"
+  description = "Allow outbound traffic from Lambda"
+  vpc_id      = aws_vpc.alveum_vpc.id
+
+  egress {
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+}
+
+# 4. Create an RDS PostgreSQL instance with RDS Proxy
 resource "aws_db_instance" "alveum_db" {
   identifier = "alveumdb"
   engine = "postgres"
-  engine_version = "13.7"
+  engine_version = "13.17" # Updated to a valid version
   instance_class = "db.t3.micro"
   allocated_storage = 20
   username = var.db_username
@@ -80,6 +139,10 @@ resource "aws_db_subnet_group" "alveum_db_subnet_group" {
   }
 }
 
+resource "aws_secretsmanager_secret" "db_credentials" {
+  name = "alveum-db-credentials"
+}
+
 resource "aws_db_proxy" "alveum_db_proxy" {
   name = "alveum-db-proxy"
   engine_family = "POSTGRESQL"
@@ -93,7 +156,7 @@ resource "aws_db_proxy" "alveum_db_proxy" {
   }
 }
 
-# 3. Create an ElasticCache Redis cluster
+# 5. Create an ElasticCache Redis cluster
 resource "aws_elasticache_subnet_group" "redis_subnet_group" {
   name = "alveum-redis-subnet-group"
   subnet_ids = aws_subnet.private_subnet[*].id
@@ -111,7 +174,47 @@ resource "aws_elasticache_cluster" "alveum_redis" {
   security_group_ids = [aws_security_group.redis_sg.id]
 }
 
-# 4. Create Lambda functions
+# 6. Create IAM roles for Lambda and RDS Proxy
+resource "aws_iam_role" "lambda_exec_role" {
+  name = "lambda_exec_role"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Action = "sts:AssumeRole"
+        Effect = "Allow"
+        Principal = {
+          Service = "lambda.amazonaws.com"
+        }
+      }
+    ]
+  })
+}
+
+resource "aws_iam_role_policy_attachment" "lambda_exec_policy" {
+  role       = aws_iam_role.lambda_exec_role.name
+  policy_arn = "arn:aws:iam::aws:policy/service-role/AWSLambdaVPCAccessExecutionRole"
+}
+
+resource "aws_iam_role" "rds_proxy_role" {
+  name = "rds_proxy_role"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Action = "sts:AssumeRole"
+        Effect = "Allow"
+        Principal = {
+          Service = "rds.amazonaws.com"
+        }
+      }
+    ]
+  })
+}
+
+# 7. Create Lambda functions
 resource "aws_lambda_function" "core_service_lambda" {
   function_name = "CoreServiceLambda"
   handler = "index.handler"
@@ -153,7 +256,7 @@ resource "aws_lambda_function" "external_api_lambda" {
   source_code_hash = filebase64sha256("external_api_lambda.zip")
 }
 
-# 5. Create API Gateway
+# 8. Create API Gateway
 resource "aws_api_gateway_rest_api" "alveum_api" {
   name = "AlveumAPI"
 }
@@ -180,7 +283,18 @@ resource "aws_api_gateway_integration" "external_integration" {
   uri = aws_lambda_function.external_api_lambda.invoke_arn
 }
 
-# 6. Outputs
+resource "aws_api_gateway_stage" "alveum_api_stage" {
+  stage_name    = "prod"
+  rest_api_id   = aws_api_gateway_rest_api.alveum_api.id
+  deployment_id = aws_api_gateway_deployment.alveum_api_deployment.id
+}
+
+resource "aws_api_gateway_deployment" "alveum_api_deployment" {
+  rest_api_id = aws_api_gateway_rest_api.alveum_api.id
+  depends_on = [aws_api_gateway_integration.external_integration]
+}
+
+# 9. Outputs
 output "api_gateway_url" {
-  value = aws_api_gateway_deployment.alveum_api_deployment.invoke_url
+  value = "${aws_api_gateway_deployment.alveum_api_deployment.invoke_url}/${aws_api_gateway_stage.alveum_api_stage.stage_name}"
 }
