@@ -199,6 +199,15 @@ resource "aws_codebuild_project" "alveum_build" {
 
 ---
 
+## **Assumptions**
+1. RabbitMQ: An external RabbitMQ server is used for message queuing. Credentials are stored in AWS Secrets Manager.
+
+2. External APIs: External AI APIs are accessible via the internet.
+
+3. AWS Cognito: Pre-configured for authentication
+
+---
+
 ## **Cleanup**
 To avoid unnecessary charges, destroy the infrastructure after testing:
 ```bash
