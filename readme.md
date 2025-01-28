@@ -88,19 +88,6 @@ terraform apply
 
 ---
 
-## **Next Steps**
-1. **Add RabbitMQ Integration**:
-   - Store RabbitMQ credentials in AWS Secrets Manager.
-   - Update the Core Service Lambda function to consume messages from RabbitMQ.
-
-2. **Set Up CI/CD Pipeline**:
-   - Use AWS CodePipeline and CodeBuild to automate the deployment process.
-
-3. **Add Monitoring**:
-   - Set up CloudWatch Alarms and Dashboards for monitoring.
-
----
-
 ## **Steps to Automate the Deployment Process**
 To avoid manual steps, we can set up a **CI/CD pipeline** using **AWS CodePipeline** and **CodeBuild**. Here’s an example pipeline configuration:
 
@@ -199,6 +186,18 @@ resource "aws_codebuild_project" "alveum_build" {
   }
 }
 ```
+## **Next Steps**
+1. **Add RabbitMQ Integration**:
+   - Store RabbitMQ credentials in AWS Secrets Manager.
+   - Update the Core Service Lambda function to consume messages from RabbitMQ.
+
+2. **Set Up CI/CD Pipeline**:
+   - Use AWS CodePipeline and CodeBuild to automate the deployment process.
+
+3. **Add Monitoring**:
+   - Set up CloudWatch Alarms and Dashboards for monitoring.
+
+---
 
 ## **Cleanup**
 To avoid unnecessary charges, destroy the infrastructure after testing:
