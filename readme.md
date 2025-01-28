@@ -101,6 +101,105 @@ terraform apply
 
 ---
 
+## **Steps to Automate the Deployment Process**
+To avoid manual steps, we can set up a **CI/CD pipeline** using **AWS CodePipeline** and **CodeBuild**. Here’s an example pipeline configuration:
+
+### **1. Create a `buildspec.yml` File**
+This file defines the build steps for CodeBuild:
+```yaml
+version: 0.2
+
+phases:
+  install:
+    commands:
+      - echo "Installing dependencies..."
+      - npm install -g aws-cdk
+      - terraform init
+
+  build:
+    commands:
+      - echo "Building the infrastructure..."
+      - terraform validate
+      - terraform apply -auto-approve
+
+artifacts:
+  files:
+    - "**/*"
+```
+
+### **2. Create a CodePipeline**
+Use the following Terraform configuration to create a pipeline:
+
+```hcl
+resource "aws_codepipeline" "alveum_pipeline" {
+  name     = "alveum-pipeline"
+  role_arn = aws_iam_role.codepipeline_role.arn
+
+  artifact_store {
+    location = aws_s3_bucket.pipeline_artifacts.bucket
+    type     = "S3"
+  }
+
+  stage {
+    name = "Source"
+
+    action {
+      name             = "Source"
+      category         = "Source"
+      owner            = "ThirdParty"
+      provider         = "GitHub"
+      version          = "1"
+      output_artifacts = ["source_output"]
+
+      configuration = {
+        Owner      = "your-github-username"
+        Repo       = "your-repo-name"
+        Branch     = "main"
+        OAuthToken = var.github_token
+      }
+    }
+  }
+
+  stage {
+    name = "Build"
+
+    action {
+      name             = "Build"
+      category         = "Build"
+      owner            = "AWS"
+      provider         = "CodeBuild"
+      version          = "1"
+      input_artifacts  = ["source_output"]
+      output_artifacts = ["build_output"]
+
+      configuration = {
+        ProjectName = aws_codebuild_project.alveum_build.name
+      }
+    }
+  }
+}
+
+resource "aws_codebuild_project" "alveum_build" {
+  name          = "alveum-build"
+  service_role  = aws_iam_role.codebuild_role.arn
+
+  artifacts {
+    type = "CODEPIPELINE"
+  }
+
+  environment {
+    compute_type    = "BUILD_GENERAL1_SMALL"
+    image           = "aws/codebuild/standard:5.0"
+    type            = "LINUX_CONTAINER"
+  }
+
+  source {
+    type      = "CODEPIPELINE"
+    buildspec = "buildspec.yml"
+  }
+}
+```
+
 ## **Cleanup**
 To avoid unnecessary charges, destroy the infrastructure after testing:
 ```bash
@@ -108,7 +207,3 @@ terraform destroy
 ```
 
 ---
-
-## **Contributing**
-Feel free to open issues or submit pull requests for improvements.
-
